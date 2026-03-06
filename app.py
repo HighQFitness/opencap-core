@@ -53,10 +53,10 @@ max_on_prem_pending_trials = 5
 
 while True:
     # Run test trial at a given frequency to check status of machine. Stop machine if fails.
-    if checkTime(t,minutesElapsed=30) or not initialStatusCheck:
-        runTestSession(isDocker=isDocker)           
-        t = time.localtime()
-        initialStatusCheck = True
+    # if checkTime(t,minutesElapsed=30) or not initialStatusCheck:
+    #     runTestSession(isDocker=isDocker)           
+    #     t = time.localtime()
+    #     initialStatusCheck = True
 
     # When using autoscaling, if there are on-prem workers, then we will remove
     # the instance scale-in protection if the number of pending trials is below
