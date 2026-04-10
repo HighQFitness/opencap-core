@@ -1,4 +1,5 @@
 {
     "openpose": "1x736",
-    "hrnet": 0.8
+    "hrnet": 0.8,
+    "vitpose": 0.8
 }

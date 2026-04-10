@@ -66,7 +66,9 @@ def main(sessionName, trialName, trial_id, cameras_to_use=['all'],
     # This is a hack to handle a mismatch between the use of mmpose and hrnet,
     # and between the use of OpenPose and openpose.
     if poseDetector == 'hrnet':
-        poseDetector = 'mmpose'        
+        poseDetector = 'mmpose'
+    elif poseDetector == 'vitpose':
+        poseDetector = 'mmpose'
     elif poseDetector == 'openpose':
         poseDetector = 'OpenPose'
     if poseDetector == 'mmpose':

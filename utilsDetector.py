@@ -48,8 +48,13 @@ def runPoseDetector(CameraDirectories, trialRelativePath, pathPoseDetector,
                 generateVideo=generateVideo)
         elif poseDetector == 'mmpose':
             runMMposeVideo(
-                cameraDirectory,trialRelativePath,pathPoseDetector, trialName,
+                cameraDirectory, trialRelativePath, pathPoseDetector, trialName,
                 generateVideo=generateVideo, bbox_thr=bbox_thr)
+        elif poseDetector == 'vitpose':
+            runMMposeVideo(
+                cameraDirectory, trialRelativePath, pathPoseDetector, trialName,
+                generateVideo=generateVideo, bbox_thr=bbox_thr,
+                model_variant='vitpose')
             
     return extension
             
@@ -246,9 +251,10 @@ def runMMposeVideo(
         cameraDirectory, fileName, pathMMpose, trialName,
         generateVideo=True, bbox_thr=0.8,
         model_config_person='faster_rcnn_r50_fpn_coco.py',
-        model_ckpt_person='faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth',                  
-        model_config_pose='hrnet_w48_coco_wholebody_384x288_dark_plus.py',
-        model_ckpt_pose='hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth',
+        model_ckpt_person='faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth',
+        model_config_pose=None,
+        model_ckpt_pose=None,
+        model_variant='hrnet',
         ):
     
     trialPrefix, _ = os.path.splitext(os.path.basename(fileName))
@@ -267,7 +273,16 @@ def runMMposeVideo(
     os.makedirs(pathOutputVideo, exist_ok=True)
     os.makedirs(pathOutputBox, exist_ok=True)
     os.makedirs(pathOutputPkl, exist_ok=True)
-    
+
+    # Select pose model config and checkpoint based on model_variant.
+    if model_config_pose is None or model_ckpt_pose is None:
+        if model_variant == 'vitpose':
+            model_config_pose = 'vitpose_base_coco_wholebody.py'
+            model_ckpt_pose   = 'vitpose-b-wholebody.pth'
+        else:  # hrnet (default)
+            model_config_pose = 'hrnet_w48_coco_wholebody_384x288_dark_plus.py'
+            model_ckpt_pose   = 'hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth'
+
     # Get frame rate.
     thisVideo = cv2.VideoCapture(videoFullPath)
     # frameRate = np.round(thisVideo.get(cv2.CAP_PROP_FPS))
@@ -298,7 +313,18 @@ def runMMposeVideo(
         if config("DOCKERCOMPOSE", cast=bool, default=False):
             vid_path_tmp = "/data/tmp-video.mov"
             vid_path = "/data/video_mmpose.mov"
-            
+
+            # Signal to loop_mmpose.py which model variant to use.
+            shared_settings_path = "/data/defaultOpenCapSettings.json"
+            if os.path.exists(shared_settings_path):
+                with open(shared_settings_path, 'r') as _f:
+                    _shared = json.load(_f)
+            else:
+                _shared = {}
+            _shared['active_pose_model'] = model_variant
+            with open(shared_settings_path, 'w') as _f:
+                json.dump(_shared, _f)
+
             # copy the video to vid_path_tmp
             shutil.copy(f"{cameraDirectory}/{fileName}", vid_path_tmp)
             
@@ -383,8 +409,12 @@ def arrangeMMposePkl(poseInferencePklPath, outputPklPath):
     data4pkl = []
     for c_frame, frame in enumerate(frames):
         data4people = []
-        for c, person in enumerate(frame):        
-            coordinates = person['preds_with_flip'].tolist()        
+        for c, person in enumerate(frame):
+            coordinates = person['preds_with_flip'].tolist()
+            # Slice to the number of body keypoints OpenCap uses (23).
+            # ViTPose wholebody outputs 133 keypoints; indices 0-22 are
+            # identical to the COCO + foot layout expected by getMMposeMarkerNames().
+            coordinates = coordinates[:len(markersMMpose)]
             c_coord_out = np.zeros((25*3,))  
             for c_m, marker in enumerate(markersOpenPose):            
                 if marker == "midHip":

@@ -29,8 +29,6 @@ with open('/mmpose/defaultOpenCapSettings.json') as f:
 bbox_thr = defaultOpenCapSettings['hrnet']
 model_config_person='/mmpose/faster_rcnn_r50_fpn_coco.py'
 model_ckpt_person='/mmpose/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth'
-model_config_pose='/mmpose/hrnet_w48_coco_wholebody_384x288_dark_plus.py'
-model_ckpt_pose='/mmpose/hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth'
     
 if os.path.isfile(video_path):
     os.remove(video_path)
@@ -42,6 +40,24 @@ while True:
         continue
 
     logging.info("Processing mmpose...")
+
+    # Re-read settings on each job so model_variant can change between requests.
+    shared_settings_path = "/data/defaultOpenCapSettings.json"
+    if os.path.exists(shared_settings_path):
+        with open(shared_settings_path) as _sf:
+            _shared = json.load(_sf)
+        model_type = _shared.get('active_pose_model', 'hrnet')
+    else:
+        model_type = 'hrnet'
+
+    if model_type == 'vitpose':
+        model_config_pose = '/mmpose/vitpose_base_coco_wholebody.py'
+        model_ckpt_pose   = '/mmpose/vitpose-b-wholebody.pth'
+        logging.info("Using ViTPose model.")
+    else:
+        model_config_pose = '/mmpose/hrnet_w48_coco_wholebody_384x288_dark_plus.py'
+        model_ckpt_pose   = '/mmpose/hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth'
+        logging.info("Using HRNet model.")
 
     if os.path.isdir(output_dir):
         shutil.rmtree(output_dir)
