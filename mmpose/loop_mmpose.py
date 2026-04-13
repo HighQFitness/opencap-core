@@ -26,7 +26,6 @@ generateVideo=False
 
 with open('/mmpose/defaultOpenCapSettings.json') as f:
     defaultOpenCapSettings = json.load(f)
-bbox_thr = defaultOpenCapSettings['hrnet']
 model_config_person='/mmpose/faster_rcnn_r50_fpn_coco.py'
 model_ckpt_person='/mmpose/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth'
     
@@ -40,9 +39,10 @@ while True:
         continue
 
     logging.info("Processing mmpose...")
-
     # Re-read settings on each job so model_variant can change between requests.
-    shared_settings_path = "/data/defaultOpenCapSettings.json"
+    # In the mmpose container the shared Docker volume is mounted at /mmpose/data,
+    # not /data (which is the mobilecap container's mount point).
+    shared_settings_path = "/mmpose/data/defaultOpenCapSettings.json"
     if os.path.exists(shared_settings_path):
         with open(shared_settings_path) as _sf:
             _shared = json.load(_sf)
@@ -51,12 +51,18 @@ while True:
         model_type = 'hrnet'
 
     if model_type == 'vitpose':
+        # Register the ViT backbone with mmpose before build_posenet is called.
+        # The base Docker image (mmpose ~v0.13) predates ViTPose and does not
+        # include this backbone; importing the local file registers it.
+        import vit_backbone  # noqa: F401
         model_config_pose = '/mmpose/vitpose_base_coco_wholebody.py'
         model_ckpt_pose   = '/mmpose/vitpose-b-wholebody.pth'
+        bbox_thr = defaultOpenCapSettings.get('vitpose', 0.8)
         logging.info("Using ViTPose model.")
     else:
         model_config_pose = '/mmpose/hrnet_w48_coco_wholebody_384x288_dark_plus.py'
         model_ckpt_pose   = '/mmpose/hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth'
+        bbox_thr = defaultOpenCapSettings.get('hrnet', 0.8)
         logging.info("Using HRNet model.")
 
     if os.path.isdir(output_dir):
@@ -89,4 +95,5 @@ while True:
         
     except:
         logging.info("mmpose: Pose detection failed.")
+        logging.info("mmpose: Exception: %s", traceback.format_exc())
         os.remove(video_path)

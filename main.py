@@ -67,14 +67,13 @@ def main(sessionName, trialName, trial_id, cameras_to_use=['all'],
     # and between the use of OpenPose and openpose.
     if poseDetector == 'hrnet':
         poseDetector = 'mmpose'
-    elif poseDetector == 'vitpose':
-        poseDetector = 'mmpose'
     elif poseDetector == 'openpose':
         poseDetector = 'OpenPose'
-    if poseDetector == 'mmpose':
+    if poseDetector in ('mmpose', 'vitpose'):
         outputMediaFolder = 'OutputMedia_mmpose' + str(bbox_thr)
     elif poseDetector == 'OpenPose':
         outputMediaFolder = 'OutputMedia_' + resolutionPoseDetection
+    logging.info('Pose detector: %s', poseDetector)
     
     # %% Special case: extrinsics trial.
     # For that trial, we only calibrate the cameras.
@@ -141,7 +140,7 @@ def main(sessionName, trialName, trial_id, cameras_to_use=['all'],
     # %% Paths to pose detector folder for local testing.
     if poseDetector == 'OpenPose':
         poseDetectorDirectory = getOpenPoseDirectory(isDocker)
-    elif poseDetector == 'mmpose':
+    elif poseDetector in ('mmpose', 'vitpose'):
         poseDetectorDirectory = getMMposeDirectory(isDocker)    
         
     # %% Create marker folders
@@ -149,7 +148,7 @@ def main(sessionName, trialName, trial_id, cameras_to_use=['all'],
     if genericFolderNames:
         markerDataFolderName = os.path.join('MarkerData') 
     else:
-        if poseDetector == 'mmpose':
+        if poseDetector in ('mmpose', 'vitpose'):
             suff_pd = '_' + str(bbox_thr)
         elif poseDetector == 'OpenPose':
             suff_pd = '_' + resolutionPoseDetection
@@ -187,7 +186,7 @@ def main(sessionName, trialName, trial_id, cameras_to_use=['all'],
             }
         if poseDetector == 'OpenPose':
             settings['resolutionPoseDetection'] = resolutionPoseDetection
-        elif poseDetector == 'mmpose':
+        elif poseDetector in ('mmpose', 'vitpose'):
             settings['bbox_thr'] = bbox_thr
         with open(pathSettings, 'w') as file:
             yaml.dump(settings, file)
@@ -535,9 +534,13 @@ def main(sessionName, trialName, trial_id, cameras_to_use=['all'],
             # Get time range.
             try:
                 thresholdPosition = 0.003
-                maxThreshold = 0.015
+                # ViTPose produces higher frame-to-frame jitter than HRNet
+                # because of the global-attention ViT backbone; relax the
+                # upper threshold so scaling can still find a static window.
+                maxThreshold = 0.04 if poseDetector == 'vitpose' else 0.015
                 increment = 0.001
                 success = False
+                lastScaleError = None
                 while thresholdPosition <= maxThreshold and not success:
                     try:
                         timeRange4Scaling = getScaleTimeRange(
@@ -546,8 +549,32 @@ def main(sessionName, trialName, trial_id, cameras_to_use=['all'],
                             thresholdTime=0.1, removeRoot=True)
                         success = True
                     except Exception as e:
+                        lastScaleError = e
                         logging.info(f"Attempt identifying scaling time range with thresholdPosition {thresholdPosition} failed: {e}")
                         thresholdPosition += increment  # Increase the threshold for the next iteration
+
+                if not success:
+                    # Log the actual TRC marker statistics to diagnose noise level.
+                    try:
+                        import utilsDataman
+                        import numpy as np
+                        _trc = utilsDataman.TRCFile(pathTRCFile4Scaling)
+                        _markers = ["C7_study", "r_shoulder_study", "L_shoulder_study",
+                                    "r.ASIS_study", "L.ASIS_study"]
+                        for _m in _markers:
+                            try:
+                                _d = _trc.marker(_m)
+                                _diff = np.nanmax(_d, axis=0) - np.nanmin(_d, axis=0)
+                                logging.info(f"TRC marker '{_m}' total range (m): "
+                                             f"x={_diff[0]:.4f} y={_diff[1]:.4f} z={_diff[2]:.4f} "
+                                             f"has_nan={np.isnan(_d).any()}")
+                            except Exception:
+                                logging.info(f"TRC marker '{_m}' not found in TRC file")
+                    except Exception as _e:
+                        logging.info(f"Could not inspect TRC: {_e}")
+                    exception = ("Could not identify a still scaling time range in the neutral pose trial. "
+                                 "Make sure the subject stands upright and still at the start of the recording.")
+                    raise Exception(exception, str(lastScaleError))
 
                 # Run scale tool.
                 logging.info('Running Scaling')

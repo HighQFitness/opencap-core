@@ -60,7 +60,7 @@ def synchronizeVideos(CameraDirectories, trialRelativePath, pathPoseDetector,
             os.path.basename(trialRelativePath))
         if poseDetector == 'OpenPose':
             outputPklFolder = "OutputPkl_" + resolutionPoseDetection
-        elif poseDetector == 'mmpose':
+        elif poseDetector in ('mmpose', 'vitpose'):
             outputPklFolder = "OutputPkl_mmpose_" + str(bbox_thr)
         openposePklDir = os.path.join(outputPklFolder, trialName)
         pathOutputPkl = os.path.join(cameraDirectory, openposePklDir)

@@ -121,6 +121,8 @@ def processTrial(session_id, trial_id, trial_type = 'dynamic',
                 bbox_thr = defaultOpenCapSettings['hrnet']
             elif poseDetector.lower() == 'vitpose':
                 bbox_thr = defaultOpenCapSettings['vitpose']
+            logging.info('Pose model from session metadata: %s (bbox_thr=%s, resolution=%s)',
+                         poseDetector, bbox_thr, resolutionPoseDetection)
 
         # run static
         try:
@@ -217,6 +219,8 @@ def processTrial(session_id, trial_id, trial_type = 'dynamic',
                 bbox_thr = defaultOpenCapSettings['hrnet']
             elif poseDetector.lower() == 'vitpose':
                 bbox_thr = defaultOpenCapSettings['vitpose']
+            logging.info('Pose model from session metadata: %s (bbox_thr=%s, resolution=%s)',
+                         poseDetector, bbox_thr, resolutionPoseDetection)
         
         # run dynamic
         try:

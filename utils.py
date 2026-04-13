@@ -774,7 +774,7 @@ def postMotionData(trial_id,session_path,trial_name=None,isNeutral=False,
 
     if poseDetector.lower() == 'openpose':
         pklDir = os.path.join("OutputPkl_" + resolutionPoseDetection, trial_name)
-    elif poseDetector.lower() == 'hrnet':
+    elif poseDetector.lower() in ('hrnet', 'vitpose'):
         pklDir = os.path.join("OutputPkl_mmpose_" + str(bbox_thr), trial_name)
     else:
         raise Exception('Unknown pose detector: {}'.format(poseDetector))
@@ -863,7 +863,7 @@ def getMotionData(trial_id, session_path,
                            poseDetector=poseDetector,
                            resolutionPoseDetection=main_settings['resolutionPoseDetection'])
 
-        elif poseDetector.lower() == 'hrnet':
+        elif poseDetector.lower() in ('hrnet', 'vitpose'):
             # shared check with `checkAndGetPosePickles()`
             if 'bbox_thr' in main_settings:
                 bbox_thr = main_settings['bbox_thr']
@@ -967,7 +967,7 @@ def getPosePickles(trial_id,session_path, poseDetector='OpenPose',
 
     if poseDetector.lower() == 'openpose':
         pklDir = os.path.join("OutputPkl_" + resolutionPoseDetection, trial_name)
-    elif poseDetector.lower() == 'hrnet':
+    elif poseDetector.lower() in ('hrnet', 'vitpose'):
         pklDir = os.path.join("OutputPkl_mmpose_" + str(bbox_thr), trial_name)
     else:
         raise Exception('Unknown pose detector: {}'.format(poseDetector))
@@ -1014,6 +1014,16 @@ def checkAndGetPosePickles(trial_id, session_path, poseDetector, resolutionPoseD
             if usedPoseDetector.lower() == poseDetector.lower() and usedBbox_thr == bbox_thr:
                 print('The pose pickles for {} {} already exist in the database. We will download them to avoid re-running pose estimation'.format(poseDetector, bbox_thr))
                 getPosePickles(trial_id,session_path, poseDetector=poseDetector, bbox_thr=bbox_thr)
+            else:
+                print('The pose pickles in the database are for {} {}, but you are now using {} {}. We will re-run pose estimation'.format(usedPoseDetector, usedBbox_thr, poseDetector, bbox_thr))
+        elif poseDetector.lower() == 'vitpose':
+            if 'bbox_thr' in main_settings:
+                usedBbox_thr = main_settings['bbox_thr']
+            else:
+                usedBbox_thr = 0.8
+            if usedPoseDetector.lower() == poseDetector.lower() and usedBbox_thr == bbox_thr:
+                print('The pose pickles for {} {} already exist in the database. We will download them to avoid re-running pose estimation'.format(poseDetector, bbox_thr))
+                getPosePickles(trial_id, session_path, poseDetector=poseDetector, bbox_thr=bbox_thr)
             else:
                 print('The pose pickles in the database are for {} {}, but you are now using {} {}. We will re-run pose estimation'.format(usedPoseDetector, usedBbox_thr, poseDetector, bbox_thr))
         else:
@@ -1794,7 +1804,7 @@ def makeRequestWithRetry(method, url,
 
     adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
     with requests.Session() as session:
-        session.mount("https://", adapter)
+        session.mount("http://", adapter)
         response = session.request(method,
                                     url,
                                     headers=headers,

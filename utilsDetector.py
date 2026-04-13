@@ -6,6 +6,7 @@ import numpy as np
 import json
 import sys
 import time
+import logging
 
 from decouple import config
 
@@ -282,6 +283,8 @@ def runMMposeVideo(
         else:  # hrnet (default)
             model_config_pose = 'hrnet_w48_coco_wholebody_384x288_dark_plus.py'
             model_ckpt_pose   = 'hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth'
+    logging.info('MMpose model variant: %s | config: %s | checkpoint: %s | bbox_thr: %s',
+                 model_variant, model_config_pose, model_ckpt_pose, bbox_thr)
 
     # Get frame rate.
     thisVideo = cv2.VideoCapture(videoFullPath)
