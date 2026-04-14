@@ -557,7 +557,6 @@ def main(sessionName, trialName, trial_id, cameras_to_use=['all'],
                     # Log the actual TRC marker statistics to diagnose noise level.
                     try:
                         import utilsDataman
-                        import numpy as np
                         _trc = utilsDataman.TRCFile(pathTRCFile4Scaling)
                         _markers = ["C7_study", "r_shoulder_study", "L_shoulder_study",
                                     "r.ASIS_study", "L.ASIS_study"]

@@ -4,6 +4,7 @@ import logging
 import shutil
 import json
 import torch
+import traceback
 
 from utilsMMpose import detection_inference, pose_inference
 
@@ -49,7 +50,8 @@ while True:
         model_type = _shared.get('active_pose_model', 'hrnet')
     else:
         model_type = 'hrnet'
-
+    logging.info('[loop_mmpose] shared_settings_path exists=%s, resolved model_type="%s"', 
+             os.path.exists(shared_settings_path), model_type)
     if model_type == 'vitpose':
         # Register the ViT backbone with mmpose before build_posenet is called.
         # The base Docker image (mmpose ~v0.13) predates ViTPose and does not
@@ -83,6 +85,8 @@ while True:
         pklPath = os.path.join(output_dir, 'human.pkl')
         videoOutPath = ''
         full_model_config_pose = model_config_pose
+        logging.info('[loop_mmpose] Running pose_inference with config=%s checkpoint=%s bbox_thr=%s',
+             full_model_config_pose, pathModelCkptPose, bbox_thr)
         pose_inference(full_model_config_pose, pathModelCkptPose, 
                        video_path, bboxPath, pklPath, videoOutPath, 
                        bbox_thr=bbox_thr, visualize=generateVideo)

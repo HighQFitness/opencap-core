@@ -6,6 +6,7 @@ import json
 import logging
 import time
 import random
+import traceback
 import urllib
 
 from main import main
@@ -151,13 +152,13 @@ def processTrial(session_id, trial_id, trial_type = 'dynamic',
                 pass
             
             error_msg = {}
-            error_msg['error_msg'] = e.args[0]
-            error_msg['error_msg_dev'] = e.args[1]
+            error_msg['error_msg'] = e.args[0] if len(e.args) > 0 else str(e)
+            error_msg['error_msg_dev'] = e.args[1] if len(e.args) > 1 else traceback.format_exc()
             _ = makeRequestWithRetry('PATCH',
                                      trial_url,
                                      data={"meta": json.dumps(error_msg)},
                                      headers = {"Authorization": "Token {}".format(API_TOKEN)})
-            raise Exception('Static trial failed', e.args[0], e.args[1])
+            raise Exception('Static trial failed', error_msg['error_msg'], error_msg['error_msg_dev'])
         
         if not hasWritePermissions:
             print('You are not the owner of this session, so do not have permission to write results to database.')
@@ -484,13 +485,13 @@ def runTestSession(pose='all',isDocker=True,maxNumTries=3):
         logging.info(f"Starting test trial attempt #{numTries} of {maxNumTries}")
         trials = {}
         
-        # if not any(s in API_URL for s in ['api-server.', '127.0']) : # prod trials
-        #     trials['openpose'] = '3f2960c7-ca29-45b0-9be5-8d74db6131e5' # session ae2d50f1-537a-44f1-96a5-f5b7717452a3 
-        #     trials['hrnet'] = '299ca938-8765-4a84-9adf-6bdf0e072451' # session faef80d3-0c26-452c-a7be-28dbfe04178e
-        #     # trials['failure'] = '698162c8-3980-46e5-a3c5-8d4f081db4c4' # failed trial for testing
-        # else: # dev trials
-        #     trials['openpose'] = '89d77579-8371-4760-a019-95f2c793622c' # session acd0e19c-6c86-4ba4-95fd-94b97229a926
-        #     trials['hrnet'] = 'e0e02393-42ee-46d4-9ae1-a6fbb0b89c42' # session 3510c726-a1b8-4de4-a4a2-52b021b4aab2
+        if not any(s in API_URL for s in ['api-server.', '127.0']) : # prod trials
+            trials['openpose'] = '3f2960c7-ca29-45b0-9be5-8d74db6131e5' # session ae2d50f1-537a-44f1-96a5-f5b7717452a3 
+            trials['hrnet'] = '299ca938-8765-4a84-9adf-6bdf0e072451' # session faef80d3-0c26-452c-a7be-28dbfe04178e
+            # trials['failure'] = '698162c8-3980-46e5-a3c5-8d4f081db4c4' # failed trial for testing
+        else: # dev trials
+            trials['openpose'] = '89d77579-8371-4760-a019-95f2c793622c' # session acd0e19c-6c86-4ba4-95fd-94b97229a926
+            trials['hrnet'] = 'e0e02393-42ee-46d4-9ae1-a6fbb0b89c42' # session 3510c726-a1b8-4de4-a4a2-52b021b4aab2
         
         if pose == 'all':
             trialList = list(trials.values())
@@ -533,4 +534,3 @@ def runTestSession(pose='all',isDocker=True,maxNumTries=3):
             message = "A backend OpenCap machine failed the status check (not HTTPError or URLError). It has been stopped."
             sendStatusEmail(message=message)
             raise Exception('Failed status check. Stopped.')
-            

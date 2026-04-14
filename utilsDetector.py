@@ -327,6 +327,7 @@ def runMMposeVideo(
             _shared['active_pose_model'] = model_variant
             with open(shared_settings_path, 'w') as _f:
                 json.dump(_shared, _f)
+            logging.info('[Docker handoff] Writing active_pose_model="%s" to %s', model_variant, shared_settings_path)
 
             # copy the video to vid_path_tmp
             shutil.copy(f"{cameraDirectory}/{fileName}", vid_path_tmp)
@@ -348,6 +349,8 @@ def runMMposeVideo(
                       
                 # copy /data/output to pathOutputPkl
                 os.system("cp /data/output_mmpose/* {pathOutputPkl}/".format(pathOutputPkl=pathOutputPkl))
+                logging.info('[Docker handoff] mmpose job completed for %s using model_variant=%s', trialPrefix, model_variant)
+
                 pkl_path_tmp = os.path.join(pathOutputPkl, 'human.pkl')
                 if os.path.exists(pkl_path_tmp):
                     os.rename(pkl_path_tmp, pklPath)
@@ -490,3 +493,4 @@ def saveJsonsAsPkl(json_directory, outputPklPath, videoName):
         pickle.dump(data4pkl, f)
                 
     return
+
