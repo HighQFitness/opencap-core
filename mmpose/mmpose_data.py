@@ -76,5 +76,7 @@ class CustomVideoDataset(Dataset):
                     'num_joints': num_joints,
                     'flip_pairs': self.flip_pairs
         }}
+        if 'dataset_idx' in self.cfg.data_cfg:
+            data['dataset_idx'] = int(self.cfg.data_cfg['dataset_idx'])
         data = self.pipeline(data)
         return data

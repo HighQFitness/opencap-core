@@ -1804,7 +1804,7 @@ def makeRequestWithRetry(method, url,
 
     adapter = requests.adapters.HTTPAdapter(max_retries=retry_strategy)
     with requests.Session() as session:
-        session.mount("http://", adapter)
+        session.mount("https://", adapter)
         response = session.request(method,
                                     url,
                                     headers=headers,

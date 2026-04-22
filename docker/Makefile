@@ -44,7 +44,7 @@ GIT_COMMIT_HASH=$(shell git rev-parse --short HEAD)
 build:
 	wget -c -O ../mmpose/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth https://mc-opencap-public.s3.us-west-2.amazonaws.com/mmpose_pth/faster_rcnn_r50_fpn_1x_coco_20200130-047c8118.pth
 	wget -c -O ../mmpose/hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth https://mc-opencap-public.s3.us-west-2.amazonaws.com/mmpose_pth/hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth
-	wget "https://huggingface.co/JunkyByte/easy_ViTPose/resolve/main/torch/wholebody/vitpose-b-wholebody.pth" -O ../mmpose/vitpose-b-wholebody.pth
+	aws s3 cp s3://open-cap-storage-dev-348102540903/vitpose/vitpose_base.pth ../mmpose/vitpose_base.pth
 
 	docker build --build-arg GIT_COMMIT_HASH=$(GIT_COMMIT_HASH) -t $(OPENCAP_IMAGE_NAME) .. -f Dockerfile
 	docker build -t $(OPENPOSE_IMAGE_NAME) .. -f openpose/Dockerfile

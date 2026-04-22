@@ -278,8 +278,8 @@ def runMMposeVideo(
     # Select pose model config and checkpoint based on model_variant.
     if model_config_pose is None or model_ckpt_pose is None:
         if model_variant == 'vitpose':
-            model_config_pose = 'vitpose_base_coco_wholebody.py'
-            model_ckpt_pose   = 'vitpose-b-wholebody.pth'
+            model_config_pose = 'vitpose_plusplus_base_wholebody_256x192_udp.py'
+            model_ckpt_pose   = 'vitpose_base.pth'
         else:  # hrnet (default)
             model_config_pose = 'hrnet_w48_coco_wholebody_384x288_dark_plus.py'
             model_ckpt_pose   = 'hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth'
@@ -343,7 +343,7 @@ def runMMposeVideo(
                         break
                     
                     if start + 60*60 < time.time():
-                        raise Exception("Pose detection timed out. This is unlikely to be your fault, please report this issue on the forum. You can proceed with your data collection (videos are uploaded to the server) and later reprocess errored trials.", 'timeout - hrnet')
+                        raise Exception("Pose detection timed out. This is unlikely to be your fault, please report this issue on the forum. You can proceed with your data collection (videos are uploaded to the server) and later reprocess errored trials.", f'timeout - {model_variant}')
                 
                     time.sleep(0.1)
                       

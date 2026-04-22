@@ -11,7 +11,14 @@ except (ImportError, ModuleNotFoundError):
     has_mmdet = False
     
 from mmpose_data import CustomVideoDataset
-from mmpose_inference import init_pose_model, init_test_pipeline, run_pose_inference, run_pose_tracking
+from mmpose_inference import (
+    init_pose_model,
+    init_test_pipeline,
+    run_pose_inference,
+    run_pose_inference_moe_wholebody,
+    run_pose_tracking,
+    uses_vitpose_plusplus_moe,
+)
 from mmcv.parallel import collate
 from torch.utils.data import DataLoader
 from mmpose.apis import vis_pose_tracking_result
@@ -93,7 +100,10 @@ def pose_inference(model_config, model_ckpt, video_path, bbox_path, pkl_path,
         batch['img'] = batch['img'].to(device)
         batch['img_metas'] = [img_metas[0] for img_metas in batch['img_metas'].data]
         with torch.no_grad():
-            result = run_pose_inference(model, batch)
+            if uses_vitpose_plusplus_moe(model):
+                result = run_pose_inference_moe_wholebody(model, batch)
+            else:
+                result = run_pose_inference(model, batch)
         instances.append(result)
 
     # concat results and transform to per frame format

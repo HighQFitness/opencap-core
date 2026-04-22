@@ -3,8 +3,8 @@ import time
 import logging
 import shutil
 import json
-import torch
 import traceback
+import torch
 
 from utilsMMpose import detection_inference, pose_inference
 
@@ -52,15 +52,16 @@ while True:
         model_type = 'hrnet'
     logging.info('[loop_mmpose] shared_settings_path exists=%s, resolved model_type="%s"', 
              os.path.exists(shared_settings_path), model_type)
+    # Frontend / active_pose_model uses "vitpose" only; weights + config are ViTPose++-B
+    # (TopDownMoE, vitpose_base.pth). See ViTAE-Transformer/ViTPose.
     if model_type == 'vitpose':
-        # Register the ViT backbone with mmpose before build_posenet is called.
-        # The base Docker image (mmpose ~v0.13) predates ViTPose and does not
-        # include this backbone; importing the local file registers it.
-        import vit_backbone  # noqa: F401
-        model_config_pose = '/mmpose/vitpose_base_coco_wholebody.py'
-        model_ckpt_pose   = '/mmpose/vitpose-b-wholebody.pth'
+        import vit_moe  # noqa: F401
+        import top_down_moe  # noqa: F401
+        model_config_pose = '/mmpose/vitpose_plusplus_base_wholebody_256x192_udp.py'
+        model_ckpt_pose = '/mmpose/vitpose_base.pth'
         bbox_thr = defaultOpenCapSettings.get('vitpose', 0.8)
-        logging.info("Using ViTPose model.")
+        logging.info(
+            'Using ViTPose++ stack (posemodel=vitpose): %s', model_config_pose)
     else:
         model_config_pose = '/mmpose/hrnet_w48_coco_wholebody_384x288_dark_plus.py'
         model_ckpt_pose   = '/mmpose/hrnet_w48_coco_wholebody_384x288_dark-f5726563_20200918.pth'
@@ -83,7 +84,7 @@ while True:
         # Run pose detection.     
         pathModelCkptPose = model_ckpt_pose
         pklPath = os.path.join(output_dir, 'human.pkl')
-        videoOutPath = ''
+        videoOutPath = ''        
         full_model_config_pose = model_config_pose
         logging.info('[loop_mmpose] Running pose_inference with config=%s checkpoint=%s bbox_thr=%s',
              full_model_config_pose, pathModelCkptPose, bbox_thr)
@@ -97,7 +98,8 @@ while True:
         
         logging.info("mmpose: Done. Cleaning up")
         
-    except:
+    except Exception:
         logging.info("mmpose: Pose detection failed.")
         logging.info("mmpose: Exception: %s", traceback.format_exc())
-        os.remove(video_path)
+        if os.path.isfile(video_path):
+            os.remove(video_path)
