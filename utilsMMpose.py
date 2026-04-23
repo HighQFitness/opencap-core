@@ -1,4 +1,5 @@
 import cv2
+import numpy as np
 import pickle
 import torch
 
@@ -17,6 +18,7 @@ from mmpose_inference import (
     run_pose_inference,
     run_pose_inference_moe_wholebody,
     run_pose_tracking,
+    temporal_smooth_preds_with_flip,
     uses_vitpose_plusplus_moe,
 )
 from mmcv.parallel import collate
@@ -68,6 +70,54 @@ def detection_inference(model_config, model_ckpt, video_path, bbox_path,
     cap.release()
     
 # %%
+def _smooth_bboxes(bbox_list, window_length=21, polyorder=2):
+    """Apply a Savitzky-Golay filter to person bounding-boxes across frames.
+
+    Each person is matched by its index within the frame (simple assumption:
+    detection order is stable, which holds for single-person clips and for
+    multi-person clips where the detector ordering is consistent).  Smoothing
+    the crop window prevents the skeleton from jumping even when individual
+    keypoint predictions are good.
+    """
+    from scipy.signal import savgol_filter
+
+    if not bbox_list:
+        return bbox_list
+
+    # Find the maximum number of persons across all frames.
+    max_persons = max(len(f) for f in bbox_list)
+    n_frames = len(bbox_list)
+
+    smoothed = [list(frame) for frame in bbox_list]
+
+    for p_idx in range(max_persons):
+        # Identify which frames contain this person index.
+        frame_ids = [fi for fi, f in enumerate(bbox_list) if p_idx < len(f)]
+        if len(frame_ids) < 3:
+            continue
+
+        coords = np.array([bbox_list[fi][p_idx]['bbox'][:4]
+                           for fi in frame_ids], dtype=np.float64)
+
+        wl = min(window_length, len(frame_ids) if len(frame_ids) % 2 == 1
+                 else len(frame_ids) - 1)
+        wl = max(wl, polyorder + 1 if (polyorder + 1) % 2 == 1
+                 else polyorder + 2)
+        if wl > len(frame_ids):
+            continue
+
+        sg = savgol_filter(coords, window_length=wl,
+                           polyorder=polyorder, axis=0)
+
+        for t, fi in enumerate(frame_ids):
+            entry = dict(smoothed[fi][p_idx])
+            entry['bbox'] = np.concatenate(
+                [sg[t], [bbox_list[fi][p_idx]['bbox'][4]]]).astype(np.float32)
+            smoothed[fi][p_idx] = entry
+
+    return smoothed
+
+
 def pose_inference(model_config, model_ckpt, video_path, bbox_path, pkl_path,
                    video_out_path, device='cuda:0', batch_size=64,
                    bbox_thr=0.95, visualize=True, save_results=True):
@@ -81,10 +131,16 @@ def pose_inference(model_config, model_ckpt, video_path, bbox_path, pkl_path,
     # build data pipeline
     test_pipeline = init_test_pipeline(model)
 
+    # Smooth raw detector bboxes to stabilise the crop window frame-to-frame.
+    raw_bboxes = pickle.load(open(str(bbox_path), 'rb'))
+    smoothed_bboxes = _smooth_bboxes(raw_bboxes)
+    smoothed_bbox_path = str(bbox_path) + '.smoothed.pkl'
+    pickle.dump(smoothed_bboxes, open(smoothed_bbox_path, 'wb'))
+
     # build dataset
     video_basename = video_path.split("/")[-1].split(".")[0]
     dataset = CustomVideoDataset(video_path=video_path,
-                                 bbox_path=bbox_path,
+                                 bbox_path=smoothed_bbox_path,
                                  bbox_threshold=bbox_thr,
                                  pipeline=test_pipeline,
                                  config=model.cfg)
@@ -112,6 +168,9 @@ def pose_inference(model_config, model_ckpt, video_path, bbox_path, pkl_path,
 
     # run pose tracking
     results = run_pose_tracking(results)
+    # ViTPose++ 2D jitter is visibly worse than HRNet; smooth before viz/pkl.
+    if uses_vitpose_plusplus_moe(model):
+        results = temporal_smooth_preds_with_flip(results)
 
     # save results
     if save_results:
@@ -142,7 +201,7 @@ def pose_inference(model_config, model_ckpt, video_path, bbox_path, pkl_path,
                                                radius=4, thickness=1,
                                                dataset=dataset,
                                                dataset_info=dataset_info,
-                                               kpt_score_thr=0.3,
+                                               kpt_score_thr=0.4,
                                                show=False)
             videoWriter.write(vis_img)
         videoWriter.release()

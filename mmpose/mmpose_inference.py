@@ -188,6 +188,84 @@ def run_pose_inference_moe_wholebody(model, batch, save_features=False,
     return result
 
 
+def _sg_clamp(window_length, n, polyorder):
+    """Return the largest valid odd SG window <= n and >= polyorder+1."""
+    wl = min(window_length, n if n % 2 == 1 else n - 1)
+    min_wl = polyorder + 1 if (polyorder + 1) % 2 == 1 else polyorder + 2
+    wl = max(wl, min_wl)
+    return wl if wl <= n else None
+
+
+def temporal_smooth_preds_with_flip(results, window_length=21, polyorder=2,
+                                    n_passes=2, conf_window=31):
+    """Two-pass Savitzky-Golay temporal smoothing per track.
+
+    Applied bi-directionally (non-causal) since all frames are available.
+    Two chained passes give a steeper frequency rolloff than one pass with
+    a larger window, while still preserving intentional motion.
+
+    Position x,y:     two SG passes with window_length (default 21 frames).
+    Confidence score: one SG pass with conf_window (default 31 frames) so
+                      keypoints do not flicker across the visibility threshold.
+
+    window_length: SG window for x,y (frames, odd, >= polyorder+1).
+    polyorder:     polynomial order for SG (2 = piecewise quadratic).
+    n_passes:      how many times to chain the SG filter on x,y (default 2).
+    conf_window:   SG window for confidence smoothing (frames).
+    """
+    from scipy.signal import savgol_filter
+
+    track_frames = {}
+    for fi, pose_result in enumerate(results):
+        for ii, inst in enumerate(pose_result):
+            tid = int(inst.get('track_id', -1))
+            if tid < 0:
+                continue
+            track_frames.setdefault(tid, []).append((fi, ii))
+
+    for tid, frame_inst_list in track_frames.items():
+        n = len(frame_inst_list)
+        if n < 3:
+            continue
+
+        fi0, ii0 = frame_inst_list[0]
+        n_kpts = np.asarray(results[fi0][ii0]['preds_with_flip']).shape[0]
+
+        # (n_frames, n_kpts, 3) — x, y, confidence
+        data = np.zeros((n, n_kpts, 3), dtype=np.float64)
+        for t, (fi, ii) in enumerate(frame_inst_list):
+            kpts = np.asarray(results[fi][ii]['preds_with_flip'])
+            data[t] = kpts[:, :3]
+
+        # --- smooth x, y with n_passes chained SG filters ---
+        wl = _sg_clamp(window_length, n, polyorder)
+        if wl is None:
+            continue
+        xy = data[:, :, :2].copy()
+        for _ in range(n_passes):
+            xy = savgol_filter(xy, window_length=wl,
+                               polyorder=polyorder, axis=0)
+
+        # --- smooth confidence with a wider window to stop flicker ---
+        wl_c = _sg_clamp(conf_window, n, polyorder)
+        conf = data[:, :, 2].copy()
+        if wl_c is not None:
+            conf = savgol_filter(conf, window_length=wl_c,
+                                 polyorder=polyorder, axis=0)
+            conf = np.clip(conf, 0.0, 1.0)
+
+        for t, (fi, ii) in enumerate(frame_inst_list):
+            inst = results[fi][ii]
+            raw = np.asarray(inst['preds_with_flip'], dtype=np.float32)
+            raw[:, :2] = xy[t].astype(np.float32)
+            raw[:, 2] = conf[t].astype(np.float32)
+            inst['preds_with_flip'] = raw
+            if 'preds' in inst:
+                inst['preds'] = raw
+
+    return results
+
+
 def run_pose_tracking(results):
     next_id = 0
     pose_result_last = []
